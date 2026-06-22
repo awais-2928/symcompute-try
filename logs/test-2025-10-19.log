@@ -1,0 +1,4 @@
+{"level":"error","message":"This is an error message","timestamp":"2025-10-18T19:19:41.924Z","userId":"test-123"}
+{"level":"warn","message":"This is a warning message","rateLimit":"exceeded","timestamp":"2025-10-18T19:19:41.925Z"}
+{"level":"info","message":"This is an info message","service":"test","timestamp":"2025-10-18T19:19:41.925Z"}
+{"level":"debug","message":"This is a debug message","requestId":"req-456","timestamp":"2025-10-18T19:19:41.925Z"}

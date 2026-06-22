@@ -1,0 +1,541 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 1. ENUMS (System Rules & Strict States)
+// ==========================================
+
+enum ServerStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum VirtualizationType {
+  NONE
+  VMWARE_ESXI
+  HYPER_V
+  KVM
+  XEN
+  PROXMOX
+  OPENSHIFT
+  CITRIX
+}
+
+enum VmStatus {
+  PROVISIONED
+  DISABLED
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum CustomerStatus {
+  PROSPECT
+  ACTIVE
+  SUSPENDED
+  DISCONTINUED
+}
+
+enum QuoStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  EXPIRED
+  INVALIDATED
+}
+
+enum ContractStatus {
+  PENDING
+  ACTIVE
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum IpStatus {
+  FREE
+  ASSIGNED
+  RESERVED
+}
+
+enum BackupFrequency {
+  DAILY
+  WEEKLY
+  BI_WEEKLY
+  MONTHLY
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  PROVISION
+  UPGRADE
+  MIGRATE
+}
+
+// ==========================================
+// 2. MULTI-TENANCY & ORG LAYER
+// ==========================================
+
+model Organization {
+  id        String    @id @default(uuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // Soft delete tracking
+
+  // Multi-Tenant Isolation Relations
+  users             User[]
+  roles             Role[]
+  customers         Customer[]
+  servers           BareMetalServer[]
+  vms               Vm[]
+  quotations        Quotation[]
+  purchaseOrders    PurchaseOrder[]
+  provisioningTasks ProvisioningTask[]
+  auditLogs         AuditLog[]
+  invoices          Invoice[]
+}
+
+// ==========================================
+// 3. RELATIONAL RBAC & USER MANAGEMENT
+// ==========================================
+
+model User {
+  id             String    @id @default(uuid())
+  organizationId String
+  email          String    // Unique per organization boundary via index below
+  name           String
+  targetAmount   Decimal?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime? // Soft delete tracking
+
+  // Relations
+  organization     Organization         @relation(fields: [organizationId], references: [id])
+  createdQuotes    Quotation[]          @relation("QuotesCreatedBy")
+  assignedTasks    ProvisioningTask[]   @relation("EngineerTasks")
+  roleAssignments  UserRoleAssignment[]
+  auditLogs        AuditLog[]
+
+  @@unique([organizationId, email]) // Allows same email across different isolated orgs safely
+  @@index([organizationId])
+}
+
+model Role {
+  id             String    @id @default(uuid())
+  organizationId String?   // Nullable = Global default system system roles; Present = Custom tenant-defined roles
+  name           String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime? // Soft delete tracking
+  
+  organization   Organization?        @relation(fields: [organizationId], references: [id])
+  users          UserRoleAssignment[]
+  permissions    RolePermission[]
+
+  @@unique([organizationId, name])
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  action      String           // Unique namespace slug (e.g., "vm:create", "quote:approve", "ip:assign")
+  description String?
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRoleAssignment {
+  userId String
+  roleId String
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+// ==========================================
+
+// ==========================================
+
+model BareMetalServer {
+  id                    String             @id @default(uuid())
+  organizationId        String
+  serverName            String
+  dataCenterName        String
+  numCpus               Int
+  singleCpuCores        Int
+  ramGb                 Int
+  storageGb             Int
+  monthlyRentalCost     Decimal
+  currency              String
+  conversionRate        Decimal
+  oneTimeSetupCost      Decimal            @default(0)
+  ipSetupCost           Decimal            @default(0)
+  subscriptionStartDate DateTime
+  subscriptionEndDate   DateTime?
+  status                ServerStatus       @default(ACTIVE)
+  virtualization        VirtualizationType @default(NONE)
+  createdAt             DateTime           @default(now())
+  deletedAt             DateTime?          // Soft delete tracking
+
+  // Relations
+  organization          Organization       @relation(fields: [organizationId], references: [id])
+  vms                   Vm[]
+  ips                   IpAddress[]
+  provisioningTasks     ProvisioningTask[]
+  migrationsFrom        VmMigration[]      @relation("SourceServer")
+  migrationsTo          VmMigration[]      @relation("DestServer")
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+// ==========================================
+
+// ==========================================
+
+model Vm {
+  id                 String             @id @default(uuid())
+  organizationId     String
+  vmName             String?
+  serverId           String
+  customerId         String
+  cpuAllocated       Int
+  ramAllocatedGb     Int
+  storageAllocatedGb Int
+  status             VmStatus           @default(PROVISIONED)
+  creationDate       DateTime           @default(now())
+  activationDate     DateTime?
+  deletedAt          DateTime?
+  
+  // Relations
+  organization       Organization       @relation(fields: [organizationId], references: [id])
+  server             BareMetalServer    @relation(fields: [serverId], references: [id])
+  customer           Customer           @relation(fields: [customerId], references: [id])
+  ips                IpAddress[]
+  migrations         VmMigration[]
+  upgradeHistory     VmUpgradeHistory[]
+
+  @@index([organizationId])
+  @@index([serverId])
+  @@index([customerId])
+}
+
+model VmUpgradeHistory {
+  id             String   @id @default(uuid())
+  vmId           String
+  oldCpu         Int
+  newCpu         Int
+  oldRamGb       Int
+  newRamGb       Int
+  oldStorageGb   Int
+  newStorageGb   Int
+  timestamp      DateTime @default(now()) // Timestamp of upgrade
+
+  vm             Vm       @relation(fields: [vmId], references: [id], onDelete: Cascade)
+
+  @@index([vmId])
+}
+
+model VmMigration {
+  id             String          @id @default(uuid())
+  vmId           String
+  sourceServerId String
+  destServerId   String
+  migratedAt     DateTime        @default(now())
+  reason         String?
+
+  vm             Vm              @relation(fields: [vmId], references: [id], onDelete: Cascade)
+  sourceServer   BareMetalServer @relation("SourceServer", fields: [sourceServerId], references: [id])
+  destServer     BareMetalServer @relation("DestServer", fields: [destServerId], references: [id])
+
+  @@index([vmId])
+}
+
+// ==========================================
+
+// ==========================================
+
+model Customer {
+  id                    String         @id @default(uuid())
+  organizationId        String
+  companyName           String
+  companyAddress        String
+  ntnNumber             String?
+  stnNumber             String?
+  website               String?
+  landlineNumber        String?
+  status                CustomerStatus @default(PROSPECT)
+  contractNumber        String?
+  contractDate          DateTime?
+  contractRenewalDate   DateTime?
+  contractDocumentUrl   String?
+  discontinuationDate   DateTime?
+  discontinuationReason String?
+  disputeNotes          String?        @db.Text
+  createdAt             DateTime       @default(now())
+  deletedAt             DateTime?      // Soft delete tracking
+
+  // Relations
+  organization          Organization       @relation(fields: [organizationId], references: [id])
+  contacts              CustomerContact[]
+  vms                   Vm[]
+  quotations            Quotation[]
+  purchaseOrders        PurchaseOrder[]
+  ips                   IpAddress[]
+  provisioningTasks     ProvisioningTask[]
+  invoices              Invoice[]
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model CustomerContact {
+  id          String   @id @default(uuid())
+  customerId  String
+  type        String
+  name        String
+  designation String
+  email       String
+  phone       String
+
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+// ==========================================
+
+// ==========================================
+
+model Quotation {
+  id                 String          @id @default(uuid()) 
+  organizationId     String
+  quoteGroupId       String
+  version            Int             @default(1)
+  customerId         String
+  createdById        String
+  status             QuoStatus       @default(DRAFT)
+  createdAt          DateTime        @default(now())
+  expiryDate         DateTime
+  deletedAt          DateTime?       // Soft delete tracking
+
+  // Non-Compute Infrastructure Addons Sections
+  firewallRequired   Boolean         @default(false)
+  firewallCpu        Int?
+  firewallRam        Int?
+  firewallStorage    Int?
+
+  activeDirectoryServer Boolean      @default(false)
+  rdpServer             Boolean      @default(false)
+  cloudStorageRequiredGb Int         @default(0)
+  backupFrequency    BackupFrequency?
+
+  // Software Licensing Overlays
+  microsoftOs        Boolean         @default(false)
+  microsoftAd        Boolean         @default(false)
+  rdpLicenseCount    Int             @default(0)
+  cPanel             Boolean         @default(false)
+  directAdmin        Boolean         @default(false)
+  extraIpsCount      Int             @default(0)
+
+
+  totalCost          Decimal
+  profitMargin       Decimal
+  sellingPrice       Decimal
+
+  // Relations
+  organization       Organization    @relation(fields: [organizationId], references: [id])
+  customer           Customer        @relation(fields: [customerId], references: [id])
+  createdBy          User            @relation("QuotesCreatedBy", fields: [createdById], references: [id])
+  items              QuotationItem[]
+  purchaseOrders     PurchaseOrder[]
+
+  @@unique([quoteGroupId, version]) // Protects single layout configuration paths
+  @@index([organizationId])
+}
+
+model QuotationItem {
+  id             String    @id @default(uuid())
+  quotationId    String
+  vmNameLabel    String?   // Optional name or role description (e.g., "Web-Server-01")
+  cpuCores       Int
+  ramGb          Int
+  storageGb      Int
+  quantity       Int       @default(1) // Item multiplication factor
+  
+
+  cpuCost        Decimal
+  ramCost        Decimal
+  storageCost    Decimal
+  ipCost         Decimal
+
+  quotation         Quotation          @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  provisioningItems ProvisioningItem[] // Traces original line target configuration adjustments
+
+  @@index([quotationId])
+}
+
+// ==========================================
+
+// ==========================================
+
+model PurchaseOrder {
+  id                 String         @id @default(uuid())
+  organizationId     String
+  poNumber           String         @unique
+  quotationId        String
+  customerId         String
+  poDate             DateTime
+  contractStatus     ContractStatus @default(PENDING)
+  signedContractUrl  String?
+  paymentStatus      PaymentStatus  @default(PENDING)
+  createdAt          DateTime       @default(now())
+  deletedAt          DateTime?      // Soft delete tracking
+
+  // Relations
+  organization       Organization     @relation(fields: [organizationId], references: [id])
+  quotation          Quotation        @relation(fields: [quotationId], references: [id])
+  customer           Customer         @relation(fields: [customerId], references: [id])
+  provisioningTasks  ProvisioningTask[]
+
+  @@index([organizationId])
+}
+
+// ==========================================
+
+// ==========================================
+
+model ProvisioningTask {
+  id                 String       @id @default(uuid())
+  organizationId     String
+  poId               String
+  customerId         String
+  assignedServerId   String
+  assignedEngineerId String
+  status             TaskStatus   @default(PENDING)
+  createdDate        DateTime     @default(now())
+  completionDate     DateTime?
+
+  // Relations
+  organization       Organization     @relation(fields: [organizationId], references: [id])
+  po                 PurchaseOrder    @relation(fields: [poId], references: [id])
+  customer           Customer         @relation(fields: [customerId], references: [id])
+  server             BareMetalServer  @relation(fields: [assignedServerId], references: [id])
+  engineer           User             @relation("EngineerTasks", fields: [assignedEngineerId], references: [id])
+  items              ProvisioningItem[]
+
+  @@index([organizationId])
+}
+
+model ProvisioningItem {
+  id                 String           @id @default(uuid())
+  taskId             String
+  quotationItemId    String?          // Traces direct commercial authorization lineage targets
+  vmNameLabel        String?
+  cpuCores           Int
+  ramGb              Int
+  storageGb          Int
+  isProvisioned      Boolean          @default(false)
+
+  task               ProvisioningTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  quotationItem      QuotationItem?   @relation(fields: [quotationItemId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@index([quotationItemId])
+}
+
+// ==========================================
+
+// ==========================================
+
+model IpAddress {
+  ipAddress        String    @id
+  serverId         String
+  vmId             String?
+  customerId       String?
+  status           IpStatus  @default(FREE)
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime? // Soft delete tracking
+
+  // Relations
+  server           BareMetalServer @relation(fields: [serverId], references: [id])
+  vm               Vm?             @relation(fields: [vmId], references: [id])
+  customer         Customer?       @relation(fields: [customerId], references: [id])
+
+  @@index([serverId])
+  @@index([vmId])
+  @@index([status])
+}
+
+// ==========================================
+// 11. FINANCIAL PIPELINE (FUTURE-READY)
+// ==========================================
+
+model Invoice {
+  id             String        @id @default(uuid())
+  organizationId String
+  customerId     String
+  invoiceNumber  String        @unique
+  amountDue      Decimal
+  amountPaid     Decimal       @default(0)
+  status         PaymentStatus @default(PENDING)
+  dueDate        DateTime
+  issuedAt       DateTime      @default(now())
+
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  customer       Customer      @relation(fields: [customerId], references: [id])
+
+  @@index([organizationId])
+  @@index([customerId])
+}
+
+// ==========================================
+
+// ==========================================
+
+model AuditLog {
+  id             String      @id @default(uuid())
+  organizationId String
+  userId         String?
+  action         AuditAction
+  entityName     String      // Targeted record profile layout identity context (e.g., "Vm", "Quotation")
+  entityId       String      // Row target reference identifier
+  changes        Json        // State tracking delta representation data maps
+  timestamp      DateTime    @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([entityName, entityId])
+}
