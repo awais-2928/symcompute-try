@@ -35,7 +35,6 @@ export default function LoginPage() {
             const response = await handleCredentialsLogin({
                 email: formData.get("email") as string,
                 password: formData.get("password") as string,
-                callbackUrl,
             })
 
             if (response?.error) {
@@ -45,7 +44,7 @@ export default function LoginPage() {
 
             router.push(callbackUrl)
             router.refresh()
-        } catch (error) {
+        } catch {
             setError("An error occurred. Please try again.")
         } finally {
             setIsLoading(false)
@@ -55,7 +54,7 @@ export default function LoginPage() {
     const handleSocialLoginClick = async (provider: "github" | "google") => {
         try {
             await handleSocialLogin(provider, callbackUrl)
-        } catch (error) {
+        } catch {
             setError(`Failed to login with ${provider}`)
         }
     }
@@ -170,7 +169,7 @@ export default function LoginPage() {
                 </CardContent>
                 <CardFooter>
                     <p className="text-center text-sm text-gray-600 w-full">
-                        Don't have an account?{" "}
+                        Don&apos;t have an account?{" "}
                         <Link
                             href="/register"
                             className="font-medium text-primary hover:underline"

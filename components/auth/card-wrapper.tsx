@@ -18,7 +18,7 @@ interface CardWrapperProps {
   backButtonHref: string;
 }
 
-const CardWrapper = ({ children, headerLabel, backButtonLabel, backButtonHref, title, showSocial}: CardWrapperProps) => {
+const CardWrapper = ({ children, headerLabel, backButtonLabel, backButtonHref, title}: CardWrapperProps) => {
   return (
     <Card className="xl:w-1/4 md:w-1/2 shadow-md">
       <CardHeader>

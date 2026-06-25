@@ -1,46 +1,32 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createLogger } from './lib/logger';
+import NextAuth from "next-auth";
+import authConfig from "./auth.config";
 
-const logger = createLogger('middleware');
+const { auth } = NextAuth(authConfig);
 
-export function middleware(request: NextRequest) {
-  const start = Date.now();
-  
-  // Log the incoming request
-  logger.http('Incoming Request', {
-    method: request.method,
-    url: request.url,
-    userAgent: request.headers.get('user-agent'),
-    ip: request.ip || request.headers.get('x-forwarded-for'),
-    pathname: request.nextUrl.pathname,
-  });
+const publicRoutes = ["/login", "/register"];
 
-  // Continue with the request
-  const response = NextResponse.next();
-  
-  // Calculate response time
-  const responseTime = Date.now() - start;
-  
-  // Log the response
-  logger.http('Outgoing Response', {
-    method: request.method,
-    url: request.url,
-    statusCode: response.status,
-    responseTime: `${responseTime}ms`,
-  });
+export default auth((req) => {
+  const { nextUrl } = req;
+  const isLoggedIn = !!req.auth;
+  const isPublicRoute = publicRoutes.includes(nextUrl.pathname);
 
-  return response;
-}
+  // Redirect logged in users away from login/register
+  if (isLoggedIn && isPublicRoute) {
+    return Response.redirect(new URL("/dashboard", nextUrl));
+  }
+
+  // Redirect non-authenticated users to login
+  if (!isLoggedIn && !isPublicRoute) {
+    const redirectUrl = new URL("/login", nextUrl);
+    redirectUrl.searchParams.set("callbackUrl", nextUrl.href);
+    return Response.redirect(redirectUrl);
+  }
+
+  return;
+});
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$|.*\\.svg$).*)",
   ],
 };

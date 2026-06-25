@@ -1,10 +1,5 @@
-import GoogleLogin from "@/components/auth/google-login";
+import { redirect } from "next/navigation"
 
-export default function Home() {
-  return (
-    <section>
-      <GoogleLogin />
-      
-    </section>
-  );
+export default function RootPage() {
+  redirect("/dashboard")
 }

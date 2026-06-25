@@ -9,10 +9,9 @@ interface CredentialsLoginParams {
 }
 
 export async function handleCredentialsLogin({
-                                                 email,
-                                                 password,
-                                                 callbackUrl,
-                                             }: CredentialsLoginParams) {
+    email,
+    password,
+}: Omit<CredentialsLoginParams, 'callbackUrl'>) {
     try {
 
         console.log("password",password)
@@ -23,7 +22,7 @@ export async function handleCredentialsLogin({
         })
 
         return result
-    } catch (error) {
+    } catch {
         throw new Error("Failed to sign in")
     }
 }
@@ -36,7 +35,7 @@ export async function handleSocialLogin(
         return await signIn(provider, {
             callbackUrl,
         })
-    } catch (error) {
+    } catch {
         throw new Error(`Failed to sign in with ${provider}`)
     }
 }
