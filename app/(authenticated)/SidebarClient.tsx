@@ -162,7 +162,7 @@ export default function SidebarClient({ userName, userRole }: SidebarClientProps
             <Link
               key={item.href}
               href={item.href}
-              className={`sidebar-link ${active ? "active" : ""} flex items-center gap-3 px-4 py-2 mx-2 mb-1 rounded-lg text-sm transition-colors duration-200`}
+              className={`sidebar-link ${active ? "active" : ""}`}
             >
               <Icon size={16} />
               <span>{item.label}</span>

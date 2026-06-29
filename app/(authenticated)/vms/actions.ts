@@ -35,8 +35,29 @@ export async function createVm(data: {
 
 export async function updateVmStatus(id: string, status: VmStatus) {
   try {
-    await getOrgId()
-    await prisma.vm.update({ where: { id }, data: { status } })
+    const session = await auth()
+    if (!session?.user?.id) throw new Error("Unauthorized")
+    
+    const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { organizationId: true } })
+    if (!user) throw new Error("Not found")
+
+    const vm = await prisma.vm.findUnique({ where: { id } })
+    if (!vm) return { success: false, error: "VM not found" }
+
+    await prisma.$transaction([
+      prisma.vm.update({ where: { id }, data: { status } }),
+      prisma.auditLog.create({
+        data: {
+          organizationId: user.organizationId,
+          userId: session.user.id,
+          action: "UPDATE",
+          entityName: "Vm",
+          entityId: id,
+          changes: { oldStatus: vm.status, newStatus: status }
+        }
+      })
+    ])
+
     revalidatePath("/vms")
     return { success: true }
   } catch (e) {
@@ -86,5 +107,28 @@ export async function deleteVm(id: string) {
   } catch (e) {
     console.error(e)
     return { success: false, error: "Failed to delete VM" }
+  }
+}
+
+export async function getVmAuditLogs(vmId: string) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return []
+    const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { organizationId: true } })
+    if (!user) return []
+
+    const logs = await prisma.auditLog.findMany({
+      where: {
+        organizationId: user.organizationId,
+        entityName: "Vm",
+        entityId: vmId
+      },
+      orderBy: { timestamp: "desc" }
+    })
+    
+    return logs
+  } catch (e) {
+    console.error(e)
+    return []
   }
 }

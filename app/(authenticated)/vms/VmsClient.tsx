@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Plus, Trash2, MonitorCheck, Search, TrendingUp, Cpu, History } from "lucide-react"
-import { createVm, updateVmStatus, upgradeVm, deleteVm } from "./actions"
+import { createVm, updateVmStatus, upgradeVm, deleteVm, getVmAuditLogs } from "./actions"
 import type { Vm, VmStatus, IpAddress, VmUpgradeHistory, BareMetalServer, Customer } from "@prisma/client"
 
 type VmWithRelations = Vm & {
@@ -41,6 +41,7 @@ export default function VmsClient({
   const [showCreate, setShowCreate] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState<VmWithRelations | null>(null)
   const [showHistory, setShowHistory] = useState<VmWithRelations | null>(null)
+  const [statusLogs, setStatusLogs] = useState<any[]>([])
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
@@ -97,6 +98,13 @@ export default function VmsClient({
       showToast(result.error || "Failed", "error")
     }
     setLoading(false)
+  }
+
+  const handleOpenHistory = async (vm: VmWithRelations) => {
+    setShowHistory(vm)
+    setStatusLogs([])
+    const logs = await getVmAuditLogs(vm.id)
+    setStatusLogs(logs)
   }
 
   const handleDelete = async () => {
@@ -222,7 +230,7 @@ export default function VmsClient({
                       >
                         <TrendingUp size={14} />
                       </button>
-                      <button onClick={() => setShowHistory(vm)} className="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="History">
+                      <button onClick={() => handleOpenHistory(vm)} className="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="History">
                         <History size={14} />
                       </button>
                       <button onClick={() => setDeleteId(vm.id)} className="p-1.5 hover:bg-red-50 rounded text-red-600" title="Delete">
@@ -352,13 +360,13 @@ export default function VmsClient({
               <button onClick={() => setShowHistory(null)} className="text-slate-400 hover:text-slate-600 text-sm">Close</button>
             </div>
             <div className="p-6">
+              <h3 className="text-sm font-semibold text-slate-900 mb-4 uppercase tracking-wide">Resource Allocations</h3>
               {showHistory.upgradeHistory.length === 0 ? (
-                <div className="text-center py-8 text-slate-400">
-                  <History size={32} className="mx-auto mb-2 opacity-30" />
+                <div className="text-center py-4 text-slate-400">
                   <p className="text-sm">No upgrade history found</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 mb-8">
                   {showHistory.upgradeHistory.map((hist, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-100 rounded-lg p-4">
                       <div className="text-xs text-slate-500 mb-2">
@@ -380,6 +388,37 @@ export default function VmsClient({
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              <h3 className="text-sm font-semibold text-slate-900 mb-4 uppercase tracking-wide">Status Changes</h3>
+              {statusLogs.length === 0 ? (
+                <div className="text-center py-4 text-slate-400">
+                  <p className="text-sm">No status changes found</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {statusLogs.map((log) => {
+                    const changes = log.changes as any
+                    if (!changes?.newStatus) return null
+                    return (
+                      <div key={log.id} className="flex items-center justify-between bg-white border border-slate-200 rounded-lg p-3 text-sm">
+                        <div className="text-slate-500 text-xs">
+                          {new Date(log.timestamp).toLocaleString()}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-slate-400">{changes.oldStatus || "UNKNOWN"}</span>
+                          <span className="text-slate-300">&rarr;</span>
+                          <span className={`badge ${
+                            changes.newStatus === "ACTIVE" ? "bg-green-100 text-green-700" :
+                            changes.newStatus === "PROVISIONED" ? "bg-blue-100 text-blue-700" :
+                            changes.newStatus === "DISABLED" ? "bg-slate-100 text-slate-600" :
+                            "bg-red-100 text-red-700"
+                          }`}>{changes.newStatus}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>

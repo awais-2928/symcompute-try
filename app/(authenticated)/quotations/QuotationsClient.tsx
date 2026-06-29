@@ -59,6 +59,7 @@ export default function QuotationsClient({
   const [search, setSearch] = useState("")
   const [viewQuote, setViewQuote] = useState<QuotationWithRelations | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [revisionBaseId, setRevisionBaseId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [createForm, setCreateForm] = useState({
@@ -84,15 +85,29 @@ export default function QuotationsClient({
       return
     }
     setLoading(true)
-    const result = await createQuotation(createForm)
+    const result = revisionBaseId 
+      ? await createQuotationRevision(revisionBaseId, createForm)
+      : await createQuotation(createForm)
+      
     if (result.success) {
-      showToast("Quotation created", "success")
+      showToast(revisionBaseId ? "Revision created" : "Quotation created", "success")
       setShowCreate(false)
       window.location.reload()
     } else {
       showToast(result.error || "Failed", "error")
     }
     setLoading(false)
+  }
+
+  const openCreateModal = () => {
+    setRevisionBaseId(null)
+    setCreateForm({
+      customerId: "",
+      expiryDate: "",
+      profitMargin: 20,
+      items: [{ ...emptyItem }] as ItemForm[],
+    })
+    setShowCreate(true)
   }
 
   const handleStatusChange = async (id: string, status: QuoStatus) => {
@@ -118,9 +133,9 @@ export default function QuotationsClient({
     }
   }
 
-  const handleCreateRevision = async (q: QuotationWithRelations) => {
-    setLoading(true)
-    const result = await createQuotationRevision(q.id, {
+  const openRevisionModal = (q: QuotationWithRelations) => {
+    setRevisionBaseId(q.id)
+    setCreateForm({
       customerId: q.customerId,
       expiryDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       profitMargin: Number(q.profitMargin),
@@ -136,13 +151,7 @@ export default function QuotationsClient({
         ipCost: Number(item.ipCost),
       }))
     })
-    if (result.success) {
-      showToast("Revision created", "success")
-      window.location.reload()
-    } else {
-      showToast(result.error || "Failed", "error")
-    }
-    setLoading(false)
+    setShowCreate(true)
   }
 
   const handleContractStatusChange = async (poId: string, status: ContractStatus) => {
@@ -196,7 +205,7 @@ export default function QuotationsClient({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+        <button onClick={openCreateModal} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
           <Plus size={14} />
           New Quotation
         </button>
@@ -230,7 +239,7 @@ export default function QuotationsClient({
             ) : (
               filtered.map((q) => {
                 const isExpired = new Date(q.expiryDate) < new Date() && q.status !== "ACCEPTED"
-                const displayStatus = isExpired ? "EXPIRED" : q.status
+                const displayStatus = isExpired ? "INVALIDATED" : q.status
 
                 return (
                   <tr key={q.id} className={isExpired ? "opacity-75" : ""}>
@@ -263,7 +272,7 @@ export default function QuotationsClient({
                         <button onClick={() => setViewQuote(q)} className="p-1.5 hover:bg-blue-50 rounded text-blue-600" title="View">
                           <Eye size={14} />
                         </button>
-                        <button onClick={() => handleCreateRevision(q)} disabled={loading} className="p-1.5 hover:bg-amber-50 rounded text-amber-600 disabled:opacity-50" title="Create Revision">
+                        <button onClick={() => openRevisionModal(q)} className="p-1.5 hover:bg-amber-50 rounded text-amber-600" title="Create Revision">
                           <FileText size={14} />
                         </button>
                         {q.status === "ACCEPTED" && q.purchaseOrders.length === 0 && (
@@ -292,8 +301,8 @@ export default function QuotationsClient({
                 </h2>
                 <p className="text-sm text-slate-500">{viewQuote.customer.companyName}</p>
               </div>
-              <span className={`badge ${statusColors[new Date(viewQuote.expiryDate) < new Date() && viewQuote.status !== "ACCEPTED" ? "EXPIRED" : viewQuote.status]}`}>
-                {new Date(viewQuote.expiryDate) < new Date() && viewQuote.status !== "ACCEPTED" ? "EXPIRED" : viewQuote.status}
+              <span className={`badge ${statusColors[new Date(viewQuote.expiryDate) < new Date() && viewQuote.status !== "ACCEPTED" ? "INVALIDATED" : viewQuote.status]}`}>
+                {new Date(viewQuote.expiryDate) < new Date() && viewQuote.status !== "ACCEPTED" ? "INVALIDATED" : viewQuote.status}
               </span>
             </div>
             <div className="p-6">
@@ -367,7 +376,9 @@ export default function QuotationsClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-100">
-              <h2 className="font-bold text-slate-900" style={{ fontFamily: "Sora, sans-serif" }}>Create Quotation</h2>
+              <h2 className="font-bold text-slate-900" style={{ fontFamily: "Sora, sans-serif" }}>
+                {revisionBaseId ? "Create Revision" : "Create Quotation"}
+              </h2>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -480,7 +491,7 @@ export default function QuotationsClient({
             <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
               <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg">Cancel</button>
               <button onClick={handleCreate} disabled={loading} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50">
-                {loading ? "Creating..." : "Create Quotation"}
+                {loading ? "Creating..." : revisionBaseId ? "Create Revision" : "Create Quotation"}
               </button>
             </div>
           </div>
