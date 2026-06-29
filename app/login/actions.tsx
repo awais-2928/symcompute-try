@@ -26,16 +26,4 @@ export async function handleCredentialsLogin({
         throw new Error("Failed to sign in")
     }
 }
-
-export async function handleSocialLogin(
-    provider: "github" | "google",
-    callbackUrl: string
-) {
-    try {
-        return await signIn(provider, {
-            callbackUrl,
-        })
-    } catch {
-        throw new Error(`Failed to sign in with ${provider}`)
-    }
-}
+

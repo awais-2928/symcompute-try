@@ -153,29 +153,31 @@ export default function SidebarClient({ userName, userRole }: SidebarClientProps
           )
         })}
 
-        <div className="mt-4 mb-1 px-4 pb-1">
-          <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--brand-text-muted)" }}>
-            Administration
-          </p>
-        </div>
+        {userRole === "Super Admin" && (
+          <>
+            <div className="mt-4 mb-1 px-4 pb-1">
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--brand-text-muted)" }}>
+                Administration
+              </p>
+            </div>
 
-        {adminItems.map((item) => {
-          if (item.label === "Audit Logs" && userRole !== "Super Admin") return null;
-          
-          const Icon = item.icon
-          const active = isActive(item.href)
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`sidebar-link ${active ? "active" : ""}`}
-            >
-              <Icon size={16} />
-              <span>{item.label}</span>
-              {active && <ChevronRight size={12} className="ml-auto opacity-60" />}
-            </Link>
-          )
-        })}
+            {adminItems.map((item) => {
+              const Icon = item.icon
+              const active = isActive(item.href)
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`sidebar-link ${active ? "active" : ""}`}
+                >
+                  <Icon size={16} />
+                  <span>{item.label}</span>
+                  {active && <ChevronRight size={12} className="ml-auto opacity-60" />}
+                </Link>
+              )
+            })}
+          </>
+        )}
       </nav>
 
       {/* User Profile */}
