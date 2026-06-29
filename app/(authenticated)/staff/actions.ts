@@ -80,9 +80,59 @@ export async function resetPassword(id: string, newPassword: string) {
     await getOrgId()
     const hashed = await bcrypt.hash(newPassword, 12)
     await prisma.user.update({ where: { id }, data: { password: hashed } })
+    revalidatePath("/staff")
     return { success: true }
   } catch (e) {
     console.error(e)
     return { success: false, error: "Failed to reset password" }
+  }
+}
+
+export async function deleteStaff(id: string) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" }
+
+    // Check if current user is Super Admin
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: { roleAssignments: { include: { role: true } } }
+    })
+    
+    if (!currentUser) return { success: false, error: "User not found" }
+    
+    const isSuperAdmin = currentUser.roleAssignments.some(ra => ra.role.name === "Super Admin")
+    if (!isSuperAdmin) {
+      return { success: false, error: "Only Super Admin can delete staff members" }
+    }
+
+    // Protect the Super Admin itself from being deleted
+    const userToDelete = await prisma.user.findUnique({
+      where: { id },
+      include: { roleAssignments: { include: { role: true } } }
+    })
+    
+    if (!userToDelete) return { success: false, error: "Staff member not found" }
+    
+    const deletingSuperAdmin = userToDelete.roleAssignments.some(ra => ra.role.name === "Super Admin")
+    if (deletingSuperAdmin) {
+      return { success: false, error: "Cannot delete a Super Admin staff member" }
+    }
+
+    if (id === session.user.id) {
+      return { success: false, error: "Cannot delete your own account" }
+    }
+
+    // Soft delete the user
+    await prisma.user.update({
+      where: { id },
+      data: { deletedAt: new Date() }
+    })
+
+    revalidatePath("/staff")
+    return { success: true }
+  } catch (e) {
+    console.error(e)
+    return { success: false, error: "Failed to delete staff member" }
   }
 }

@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Search, History, ChevronRight, ChevronDown } from "lucide-react"
+import { Search, History, ChevronRight, ChevronDown, Filter } from "lucide-react"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
 
 type AuditLogWithUser = {
   id: string
@@ -15,9 +16,34 @@ type AuditLogWithUser = {
   user: { name: string | null; email: string | null } | null
 }
 
-export default function AuditLogsClient({ logs }: { logs: AuditLogWithUser[] }) {
+type User = { id: string; name: string; email: string }
+
+export default function AuditLogsClient({ 
+  logs, 
+  users, 
+  currentAction, 
+  currentUserId 
+}: { 
+  logs: AuditLogWithUser[]
+  users: User[]
+  currentAction: string
+  currentUserId: string
+}) {
   const [search, setSearch] = useState("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const handleFilterChange = (key: string, value: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (value) {
+      params.set(key, value)
+    } else {
+      params.delete(key)
+    }
+    router.push(`${pathname}?${params.toString()}`)
+  }
 
   const filtered = logs.filter((log) => {
     const s = search.toLowerCase()
@@ -32,7 +58,7 @@ export default function AuditLogsClient({ logs }: { logs: AuditLogWithUser[] }) 
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       {/* Toolbar */}
-      <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+      <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center gap-4 bg-slate-50 justify-between">
         <div className="relative w-full max-w-sm">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -41,6 +67,36 @@ export default function AuditLogsClient({ logs }: { logs: AuditLogWithUser[] }) 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Filter size={14} className="text-slate-400" />
+            <span className="text-sm font-medium text-slate-600">Filters:</span>
+          </div>
+          <select 
+            value={currentAction}
+            onChange={(e) => handleFilterChange("action", e.target.value)}
+            className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Actions</option>
+            <option value="CREATE">CREATE</option>
+            <option value="UPDATE">UPDATE</option>
+            <option value="DELETE">DELETE</option>
+            <option value="PROVISION">PROVISION</option>
+            <option value="UPGRADE">UPGRADE</option>
+            <option value="MIGRATE">MIGRATE</option>
+          </select>
+
+          <select 
+            value={currentUserId}
+            onChange={(e) => handleFilterChange("userId", e.target.value)}
+            className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[200px] truncate"
+          >
+            <option value="">All Users</option>
+            {users.map(u => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
         </div>
       </div>
 

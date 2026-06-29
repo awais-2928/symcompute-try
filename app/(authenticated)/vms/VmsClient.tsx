@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
-import { Plus, Trash2, MonitorCheck, Search, TrendingUp, Cpu, History } from "lucide-react"
-import { createVm, updateVmStatus, upgradeVm, deleteVm, getVmAuditLogs } from "./actions"
+import { useState, useEffect } from "react"
+import { Plus, Trash2, MonitorCheck, Search, TrendingUp, Cpu, History, ArrowLeftRight } from "lucide-react"
+import { createVm, updateVmStatus, upgradeVm, deleteVm, getVmAuditLogs, migrateVm } from "./actions"
 import type { Vm, VmStatus, IpAddress, VmUpgradeHistory, BareMetalServer, Customer } from "@prisma/client"
 
 type VmWithRelations = Vm & {
@@ -37,10 +37,19 @@ export default function VmsClient({
   customers: CustomerOption[]
 }) {
   const [vms, setVms] = useState(initial)
+
+  useEffect(() => {
+    setVms(initial)
+  }, [initial])
+
   const [search, setSearch] = useState("")
   const [showCreate, setShowCreate] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState<VmWithRelations | null>(null)
   const [showHistory, setShowHistory] = useState<VmWithRelations | null>(null)
+  const [showMigrate, setShowMigrate] = useState<VmWithRelations | null>(null)
+  const [destServerId, setDestServerId] = useState("")
+  const [migrationReason, setMigrationReason] = useState("")
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [statusLogs, setStatusLogs] = useState<any[]>([])
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -115,6 +124,22 @@ export default function VmsClient({
       showToast("VM deleted", "success")
     }
     setDeleteId(null)
+  }
+
+  const handleMigrate = async () => {
+    if (!showMigrate || !destServerId) return
+    setLoading(true)
+    const result = await migrateVm(showMigrate.id, destServerId, migrationReason || undefined)
+    if (result.success) {
+      showToast("VM migrated successfully", "success")
+      setShowMigrate(null)
+      setDestServerId("")
+      setMigrationReason("")
+      window.location.reload()
+    } else {
+      showToast(result.error || "Failed to migrate VM", "error")
+    }
+    setLoading(false)
   }
 
   const filtered = vms.filter(
@@ -232,6 +257,17 @@ export default function VmsClient({
                       </button>
                       <button onClick={() => handleOpenHistory(vm)} className="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="History">
                         <History size={14} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowMigrate(vm)
+                          setDestServerId("")
+                          setMigrationReason("")
+                        }}
+                        className="p-1.5 hover:bg-blue-50 rounded text-blue-600"
+                        title="Migrate"
+                      >
+                        <ArrowLeftRight size={14} />
                       </button>
                       <button onClick={() => setDeleteId(vm.id)} className="p-1.5 hover:bg-red-50 rounded text-red-600" title="Delete">
                         <Trash2 size={14} />
@@ -399,6 +435,7 @@ export default function VmsClient({
               ) : (
                 <div className="space-y-3">
                   {statusLogs.map((log) => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const changes = log.changes as any
                     if (!changes?.newStatus) return null
                     return (
@@ -421,6 +458,84 @@ export default function VmsClient({
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Migrate Modal */}
+      {showMigrate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6 border-b border-slate-100">
+              <h2 className="font-bold text-slate-900" style={{ fontFamily: "Sora, sans-serif" }}>
+                Migrate VM: {showMigrate.vmName || `VM-${showMigrate.id.slice(-6)}`}
+              </h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="form-label mb-1">Current Server</label>
+                <div className="text-sm font-medium text-slate-600 bg-slate-50 p-2.5 border border-slate-200 rounded-lg">
+                  {showMigrate.server.serverName} ({showMigrate.server.dataCenterName})
+                </div>
+              </div>
+
+              <div>
+                <label className="form-label mb-1">Destination Server</label>
+                <select
+                  value={destServerId}
+                  onChange={(e) => setDestServerId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="">Select destination server...</option>
+                  {servers
+                    .filter((s) => s.id !== showMigrate.serverId)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.serverName} ({s.dataCenterName}) [RAM: {s.ramGb}GB, Storage: {s.storageGb}GB]
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="form-label mb-1">Reason for Migration (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Load balancing, Server maintenance..."
+                  value={migrationReason}
+                  onChange={(e) => setMigrationReason(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3 text-xs text-blue-800 space-y-1">
+                <p className="font-semibold">Required VM Resources:</p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>vCPU Cores: {showMigrate.cpuAllocated}</li>
+                  <li>RAM: {showMigrate.ramAllocatedGb} GB</li>
+                  <li>Storage: {showMigrate.storageAllocatedGb} GB</li>
+                </ul>
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowMigrate(null)
+                  setDestServerId("")
+                  setMigrationReason("")
+                }}
+                className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMigrate}
+                disabled={loading || !destServerId}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50 font-medium"
+              >
+                {loading ? "Migrating..." : "Start Migration"}
+              </button>
             </div>
           </div>
         </div>

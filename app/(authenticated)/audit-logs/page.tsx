@@ -2,8 +2,13 @@ import { auth } from "@/auth"
 import { prisma } from "@/prisma/prisma"
 import { redirect } from "next/navigation"
 import AuditLogsClient from "./AuditLogsClient"
+import { AuditAction } from "@prisma/client"
 
-export default async function AuditLogsPage() {
+export default async function AuditLogsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
@@ -18,8 +23,16 @@ export default async function AuditLogsPage() {
   })
   if (!user) redirect("/login")
 
+  const resolvedParams = await searchParams
+  const actionFilter = typeof resolvedParams.action === "string" && resolvedParams.action ? (resolvedParams.action as AuditAction) : undefined
+  const userIdFilter = typeof resolvedParams.userId === "string" && resolvedParams.userId ? resolvedParams.userId : undefined
+
   const logs = await prisma.auditLog.findMany({
-    where: { organizationId: user.organizationId },
+    where: { 
+      organizationId: user.organizationId,
+      ...(actionFilter && { action: actionFilter }),
+      ...(userIdFilter && { userId: userIdFilter }),
+    },
     include: { user: { select: { name: true, email: true } } },
     orderBy: { timestamp: "desc" },
     take: 1000,
@@ -32,6 +45,12 @@ export default async function AuditLogsPage() {
     changes: JSON.stringify(log.changes)
   }))
 
+  const allUsers = await prisma.user.findMany({
+    where: { organizationId: user.organizationId },
+    select: { id: true, name: true, email: true },
+    orderBy: { name: "asc" }
+  })
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="mb-6">
@@ -39,7 +58,12 @@ export default async function AuditLogsPage() {
         <p className="page-subtitle">View system-wide activity and modifications (Super Admin only)</p>
       </div>
 
-      <AuditLogsClient logs={serializedLogs} />
+      <AuditLogsClient 
+        logs={serializedLogs} 
+        users={allUsers} 
+        currentAction={actionFilter || ""}
+        currentUserId={userIdFilter || ""}
+      />
     </div>
   )
 }

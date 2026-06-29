@@ -17,6 +17,7 @@ import {
   ChevronRight,
   FileBarChart2,
   History,
+  FileCheck,
 } from "lucide-react"
 
 const navItems = [
@@ -41,9 +42,14 @@ const navItems = [
     icon: Users,
   },
   {
-    label: "Quotations & POs",
+    label: "Quotations",
     href: "/quotations",
     icon: FileText,
+  },
+  {
+    label: "Purchase Orders",
+    href: "/purchase-orders",
+    icon: FileCheck,
   },
   {
     label: "Provisioning",

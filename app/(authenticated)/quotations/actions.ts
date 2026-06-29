@@ -193,6 +193,7 @@ export async function updatePoContractStatus(id: string, contractStatus: import(
     await getOrgAndUser()
     await prisma.purchaseOrder.update({ where: { id }, data: { contractStatus } })
     revalidatePath("/quotations")
+    revalidatePath("/purchase-orders")
     return { success: true }
   } catch (e) {
     console.error(e)

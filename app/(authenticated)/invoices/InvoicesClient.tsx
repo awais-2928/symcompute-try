@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, FileBarChart2, Search, DollarSign } from "lucide-react"
+import { Plus, FileBarChart2, Search, DollarSign, Printer, Eye } from "lucide-react"
 import { createInvoice, recordPayment } from "./actions"
 import type { Invoice, PaymentStatus, Customer } from "@prisma/client"
 
@@ -25,6 +25,7 @@ export default function InvoicesClient({
   const invoices = initial
   const [search, setSearch] = useState("")
   const [showCreate, setShowCreate] = useState(false)
+  const [viewInvoice, setViewInvoice] = useState<InvoiceWithRelations | null>(null)
   const [payingInvoice, setPayingInvoice] = useState<InvoiceWithRelations | null>(null)
   const [payAmount, setPayAmount] = useState<number>(0)
   const [loading, setLoading] = useState(false)
@@ -164,7 +165,10 @@ export default function InvoicesClient({
                     <td>
                       <span className={`badge ${statusColors[inv.status]}`}>{inv.status}</span>
                     </td>
-                    <td>
+                    <td className="flex items-center gap-2">
+                      <button onClick={() => setViewInvoice(inv)} className="p-1.5 hover:bg-blue-50 rounded text-blue-600" title="View Invoice">
+                        <Eye size={14} />
+                      </button>
                       {inv.status !== "PAID" && (
                         <button
                           onClick={() => {
@@ -185,6 +189,40 @@ export default function InvoicesClient({
           </tbody>
         </table>
       </div>
+
+      {/* View Modal */}
+      {viewInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 no-print">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto print-area">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h2 className="font-bold text-slate-900" style={{ fontFamily: "Sora, sans-serif" }}>
+                  Invoice {viewInvoice.invoiceNumber}
+                </h2>
+                <p className="text-sm text-slate-500">{viewInvoice.customer.companyName}</p>
+              </div>
+              <span className={`badge ${statusColors[viewInvoice.status]}`}>
+                {viewInvoice.status}
+              </span>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div><p className="text-xs text-slate-500">Issued At</p><p className="text-sm font-medium">{new Date(viewInvoice.issuedAt).toLocaleDateString()}</p></div>
+                <div><p className="text-xs text-slate-500">Due Date</p><p className="text-sm font-medium">{new Date(viewInvoice.dueDate).toLocaleDateString()}</p></div>
+                <div><p className="text-xs text-slate-500">Amount Due</p><p className="text-sm font-medium text-slate-900">${Number(viewInvoice.amountDue).toLocaleString()}</p></div>
+                <div><p className="text-xs text-slate-500">Amount Paid</p><p className="text-sm font-medium text-green-700">${Number(viewInvoice.amountPaid).toLocaleString()}</p></div>
+                <div><p className="text-xs text-slate-500">Outstanding</p><p className="text-sm font-medium text-orange-600">${(Number(viewInvoice.amountDue) - Number(viewInvoice.amountPaid)).toLocaleString()}</p></div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-100 flex justify-end gap-3 no-print">
+              <button onClick={() => setViewInvoice(null)} className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg">Close</button>
+              <button onClick={() => window.print()} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg flex items-center gap-2 hover:bg-blue-700">
+                <Printer size={14} /> Export PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Modal */}
       {showCreate && (

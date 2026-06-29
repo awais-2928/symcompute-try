@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
-import { Plus, Settings2, Search, ToggleLeft, ToggleRight, Key } from "lucide-react"
-import { createStaff, toggleStaffStatus, assignRoleToUser, resetPassword } from "./actions"
+import { useState, useEffect } from "react"
+import { Plus, Settings2, Search, ToggleLeft, ToggleRight, Key, Trash2 } from "lucide-react"
+import { createStaff, toggleStaffStatus, assignRoleToUser, resetPassword, deleteStaff } from "./actions"
 import type { User, UserRoleAssignment } from "@prisma/client"
 
 type StaffWithRoles = User & {
@@ -20,6 +20,11 @@ export default function StaffClient({
   currentUserId: string
 }) {
   const [staff, setStaff] = useState(initial)
+  
+  useEffect(() => {
+    setStaff(initial)
+  }, [initial])
+
   const [search, setSearch] = useState("")
   const [showCreate, setShowCreate] = useState(false)
   const [resetFor, setResetFor] = useState<StaffWithRoles | null>(null)
@@ -89,6 +94,18 @@ export default function StaffClient({
     } else {
       showToast(result.error || "Failed", "error")
     }
+  }
+
+  const handleDeleteStaff = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this staff member?")) return
+    setLoading(true)
+    const result = await deleteStaff(id)
+    if (result.success) {
+      showToast("Staff member deleted successfully", "success")
+    } else {
+      showToast(result.error || "Failed to delete staff member", "error")
+    }
+    setLoading(false)
   }
 
   const filtered = staff.filter((s) =>
@@ -183,7 +200,7 @@ export default function StaffClient({
                       </button>
                     </td>
                     <td className="text-sm text-slate-500">{new Date(member.createdAt).toLocaleDateString()}</td>
-                    <td>
+                    <td className="flex items-center gap-2">
                       <button
                         onClick={() => { setResetFor(member); setNewPassword("") }}
                         className="flex items-center gap-1 px-2 py-1 text-xs text-slate-600 border border-slate-200 rounded hover:bg-slate-50"
@@ -192,6 +209,17 @@ export default function StaffClient({
                         <Key size={11} />
                         Reset Password
                       </button>
+
+                      {!isCurrentUser && currentRole?.name !== "Super Admin" && (
+                        <button
+                          onClick={() => handleDeleteStaff(member.id)}
+                          className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 border border-red-200 rounded hover:bg-red-50"
+                          title="Delete staff member"
+                        >
+                          <Trash2 size={11} />
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )
