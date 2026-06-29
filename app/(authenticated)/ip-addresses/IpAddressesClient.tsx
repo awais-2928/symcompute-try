@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Trash2, Network, Search, Link, Unlink } from "lucide-react"
+import { Plus, Trash2, Network, Search, Link } from "lucide-react"
 import { createIpAddress, assignIpToVm, deleteIpAddress } from "./actions"
 import type { IpAddress, IpStatus, BareMetalServer, Vm } from "@prisma/client"
 

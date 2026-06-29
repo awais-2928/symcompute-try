@@ -1,5 +1,20 @@
 import type { Metadata } from "next"
+import { Inter, Sora } from "next/font/google"
 import "./globals.css"
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
+})
+
+const sora = Sora({
+  subsets: ["latin"],
+  variable: "--font-sora",
+  weight: ["400", "600", "700"],
+  display: "swap",
+})
 
 export const metadata: Metadata = {
   title: "SymCompute - Infrastructure Management System",
@@ -12,15 +27,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@400;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={`${inter.variable} ${sora.variable}`}>
       <body className="antialiased">
         {children}
       </body>

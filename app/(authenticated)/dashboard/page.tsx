@@ -5,7 +5,6 @@ import {
   MonitorCheck,
   Users,
   FileText,
-  TrendingUp,
   Activity,
   AlertCircle,
   CheckCircle2,

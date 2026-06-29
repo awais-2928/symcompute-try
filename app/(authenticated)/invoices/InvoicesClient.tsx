@@ -22,7 +22,7 @@ export default function InvoicesClient({
   invoices: InvoiceWithRelations[]
   customers: Customer[]
 }) {
-  const [invoices, setInvoices] = useState(initial)
+  const invoices = initial
   const [search, setSearch] = useState("")
   const [showCreate, setShowCreate] = useState(false)
   const [payingInvoice, setPayingInvoice] = useState<InvoiceWithRelations | null>(null)

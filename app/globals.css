@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@400;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -51,13 +50,13 @@
   
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-inter), sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Sora', sans-serif;
+    font-family: var(--font-sora), sans-serif;
   }
 }
 
@@ -225,7 +224,7 @@
   font-size: 1.5rem;
   font-weight: 700;
   color: #0F172A;
-  font-family: 'Sora', sans-serif;
+  font-family: var(--font-sora), sans-serif;
 }
 
 .page-subtitle {
